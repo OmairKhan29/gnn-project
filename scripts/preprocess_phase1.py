@@ -9,7 +9,8 @@ Phase 1 preprocessing pipeline:
 import os
 import pickle
 import sys
-import pandas as pd  # ← ADD THIS LINE
+import pandas as pd  
+import torch
 import numpy as np 
 from tqdm import tqdm
 
@@ -96,17 +97,18 @@ def main():
             
             # For multi-task datasets (e.g., Tox21)
             else:
+                # Collect full label vector for multi-task datasets
+                labels = []
                 for task in tasks:
                     label = row[task]
-                    
-                    # Skip missing labels
-                    if label == -1 or pd.isna(label):
-                        continue
-                    
-                    graph = featurizer.mol_to_graph(mol, label=label, task_name=task)
-                    if graph is not None:
-                        graph.smiles = smiles
-                        graphs_by_split[split].append(graph)
+                    labels.append(float(label) if not pd.isna(label) else -1.0)
+    
+                label_tensor = torch.tensor(labels, dtype=torch.float)
+                graph = featurizer.mol_to_graph(mol, label=labels[0], task_name=tasks[0])
+                if graph is not None:
+                 graph.y = label_tensor  # overwrite with full vector
+                 graph.smiles = smiles
+                 graphs_by_split[split].append(graph)
         
         print(f"  Failed: {failed}/{len(df)}")
         print(f"  Train: {len(graphs_by_split['train'])}")

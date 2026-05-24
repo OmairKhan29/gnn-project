@@ -105,9 +105,8 @@ class Trainer:
             self.optimizer,
             mode="max",
             factor=0.5,
-            patience=10,
-            verbose=True,
-        )
+            patience=10,)
+
         self.es = EarlyStopping(patience=cfg.get("patience", 30))
 
         self.history = {"train_loss": [], "val_auc": []}

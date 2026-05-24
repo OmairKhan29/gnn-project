@@ -4,6 +4,7 @@ model:
   hidden_dim: 128
   n_layers: 4
   num_tasks: 1
+  dropout: 0.3
 
 training:
   batch: 128       # larger dataset — bigger batch for speed

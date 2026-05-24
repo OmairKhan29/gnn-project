@@ -55,6 +55,7 @@ def parse_args():
     parser.add_argument("--num_layers", type=int, default=4)
     parser.add_argument("--task_dim", type=int, default=64)
     parser.add_argument("--device", type=str, default="cuda")
+    parser.add_argument("--resume", action="store_true", help="Resume from checkpoint")
     return parser.parse_args()
 
 
@@ -98,6 +99,20 @@ def create_test_loaders(
                 )
     
     return test_loaders
+
+
+def verify_device(device_str: str):
+    """Verify requested device is available."""
+    if device_str == "cuda":
+        if not torch.cuda.is_available():
+            print("WARNING: CUDA requested but not available. Falling back to CPU.")
+            return "cpu"
+        gpu_name = torch.cuda.get_device_name(0)
+        gpu_mem = torch.cuda.get_device_properties(0).total_memory / 1e9
+        print(f"GPU: {gpu_name} ({gpu_mem:.1f} GB)")
+        torch.backends.cudnn.benchmark = True
+        torch.backends.cuda.matmul.allow_tf32 = True
+    return device_str
 
 
 def main():
@@ -179,7 +194,7 @@ def main():
         "epochs": args.epochs,
     }
     
-    device = args.device if torch.cuda.is_available() else "cpu"
+    device = verify_device(args.device)
     print(f"\nDevice: {device}")
     
     ckpt_path = f"checkpoints/multitask_{model_tag}_seed{args.seed}.pt"
@@ -193,6 +208,7 @@ def main():
         device=device,
         ckpt_path=ckpt_path,
         use_pcgrad=args.pcgrad,
+        resume=args.resume,
     )
     
     results = trainer.run(epochs=args.epochs)

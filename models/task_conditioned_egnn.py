@@ -7,6 +7,7 @@ shared structural learning with task-specific adaptation.
 """
 import torch
 import torch.nn as nn
+from typing import Dict
 import torch.nn.functional as F
 from torch_geometric.nn import global_mean_pool
 from torch_geometric.utils import add_self_loops
@@ -180,7 +181,10 @@ class TaskConditionedEGNN(nn.Module):
         ])
         
         self.dropout = nn.Dropout(dropout)
-        
+
+        # Project final 3D positions into graph embedding (ensures coord_mlp gets gradients)
+        self.pos_projector = nn.Linear(3, hidden_dim)
+
         # Initialize task embeddings
         nn.init.xavier_uniform_(self.task_embeddings.weight)
     
@@ -240,8 +244,9 @@ class TaskConditionedEGNN(nn.Module):
             h = self.dropout(h_new)
             pos = pos_new
         
-        # Graph-level pooling
-        graph_emb = global_mean_pool(h, batch.batch)
+        # Graph-level pooling (incorporate final positions for full gradient flow)
+        pos_emb = global_mean_pool(self.pos_projector(pos), batch.batch)
+        graph_emb = global_mean_pool(h, batch.batch) + pos_emb
         
         return graph_emb
 
@@ -349,35 +354,31 @@ class MultiTaskClassifier(nn.Module):
     def compute_loss(self, batch, task_id: Optional[torch.Tensor] = None):
         """Compute BCE loss."""
         logits = self.forward(batch, task_id)
-        return F.binary_cross_entropy_with_logits(logits, batch.y)
+        return F.binary_cross_entropy_with_logits(logits.squeeze(-1), batch.y)
     
     def compute_per_task_losses(self, batch) -> Dict[int, torch.Tensor]:
         """
         Compute separate loss for each task in batch.
         Used for PCGrad training.
-        
-        Returns
-        -------
-        dict mapping task_id -> loss tensor
         """
+        device = next(self.parameters()).device
         task_ids = batch.task_id.squeeze()
         if task_ids.dim() == 0:
             task_ids = task_ids.unsqueeze(0)
-        
+        task_ids = task_ids.to(device)
+
         unique_tasks = task_ids.unique()
         losses = {}
-        
+
         for tid in unique_tasks:
             mask = task_ids == tid
             if mask.sum() > 0:
-                # Get subset of batch for this task
                 task_logits = self.forward(batch, task_ids)[mask]
-                task_labels = batch.y[mask]
-                
+                task_labels = batch.y[mask].to(device)
                 losses[tid.item()] = F.binary_cross_entropy_with_logits(
-                    task_logits, task_labels
+                    task_logits.squeeze(-1), task_labels
                 )
-        
+
         return losses
 
 
@@ -457,23 +458,25 @@ class HardSharingClassifier(nn.Module):
     
     def compute_loss(self, batch, task_id: Optional[torch.Tensor] = None):
         logits = self.forward(batch, task_id)
-        return F.binary_cross_entropy_with_logits(logits, batch.y)
+        return F.binary_cross_entropy_with_logits(logits.squeeze(-1), batch.y)
     
     def compute_per_task_losses(self, batch):
+        device = next(self.parameters()).device
         task_ids = batch.task_id.squeeze()
         if task_ids.dim() == 0:
             task_ids = task_ids.unsqueeze(0)
-        
+        task_ids = task_ids.to(device)
+
         unique_tasks = task_ids.unique()
         losses = {}
-        
+
         for tid in unique_tasks:
             mask = task_ids == tid
             if mask.sum() > 0:
                 task_logits = self.forward(batch, task_ids)[mask]
-                task_labels = batch.y[mask]
+                task_labels = batch.y[mask].to(device)
                 losses[tid.item()] = F.binary_cross_entropy_with_logits(
-                    task_logits, task_labels
+                    task_logits.squeeze(-1), task_labels
                 )
-        
+
         return losses

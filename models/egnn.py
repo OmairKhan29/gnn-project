@@ -212,9 +212,14 @@ class EGNNClassifier(nn.Module):
         """Predict probabilities (for evaluation)."""
         logits = self.forward(batch)
         return torch.sigmoid(logits)
-    
+
     def compute_loss(self, batch):
         """Compute BCE loss."""
         logits = self.forward(batch)
-        loss = F.binary_cross_entropy_with_logits(logits, batch.y)
+
+        y = batch.y.view(-1, 1).float()   # ✅ fix shape + dtype here
+
+        loss = F.binary_cross_entropy_with_logits(logits,y)
+
         return loss
+       

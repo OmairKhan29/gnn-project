@@ -140,13 +140,16 @@ def main():
     else:
         print("\nNo conflicting task pairs found.")
     
+    # Build dataset tag for unique filenames
+    dataset_tag = "_".join(sorted(args.datasets))
+
     # Plot and save
     print("\nGenerating visualizations...")
     
     fig = plot_gradient_similarity_matrix(
         similarity_matrix,
         task_labels,
-        save_path=os.path.join(args.output_dir, "gradient_similarity_matrix.png"),
+        save_path=os.path.join(args.output_dir, f"gradient_similarity_matrix_{dataset_tag}.png"),
         title="Task Gradient Cosine Similarity (Hard Sharing)",
     )
     
@@ -156,9 +159,10 @@ def main():
         "task_labels": task_labels,
         "statistics": stats,
         "conflicts": conflicts,
+        "datasets": args.datasets,
     }
     
-    with open(os.path.join(args.output_dir, "gradient_analysis.pkl"), "wb") as f:
+    with open(os.path.join(args.output_dir, f"gradient_analysis_{dataset_tag}.pkl"), "wb") as f:
         pickle.dump(results, f)
     
     print(f"\nResults saved to: {args.output_dir}/")
